@@ -1,0 +1,274 @@
+#include "Quaternion.h"
+#include <cmath>
+
+void Quaternion::Initialize() {
+	x = 0.0f;
+	y = 0.0f;
+	z = 0.0f;
+	w = 1.0f;
+}
+
+Quaternion Quaternion::Multiply(const Quaternion& q, const Quaternion& r) {
+	Quaternion result;
+	result.w = q.w * r.w - q.x * r.x - q.y * r.y - q.z * r.z;
+	result.x = q.w * r.x + q.x * r.w + q.y * r.z - q.z * r.y;
+	result.y = q.w * r.y - q.x * r.z + q.y * r.w + q.z * r.x;
+	result.z = q.w * r.z + q.x * r.y - q.y * r.x + q.z * r.w;
+	return result;
+}
+
+Quaternion Quaternion::Identity() {
+	Quaternion result;
+	result.w = 1.0f;
+	result.x = 0.0f;
+	result.y = 0.0f;
+	result.z = 0.0f;
+	return result;
+}
+
+Quaternion Quaternion::Conjugate(const Quaternion& q) {
+	Quaternion result;
+	result.w = q.w;
+	result.x = -q.x;
+	result.y = -q.y;
+	result.z = -q.z;
+	return result;
+}
+
+float Quaternion::Norm(const Quaternion& q) {
+	return std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+}
+
+Quaternion Quaternion::Normalize(const Quaternion& q) {
+	Quaternion result;
+	float norm = Norm(q);
+	if (norm > 0.0f) {
+		result.w = q.w / norm;
+		result.x = q.x / norm;
+		result.y = q.y / norm;
+		result.z = q.z / norm;
+	}
+	else {
+		result = Identity(); // ノルムが0の場合は単位クォータニオンを返す
+	}
+	return result;
+}
+
+Quaternion Quaternion::Inverse(const Quaternion& q) {
+	Quaternion result;
+	float normSq = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
+	if (normSq > 0.0f) {
+		Quaternion conj = Conjugate(q);
+		result.w = conj.w / normSq;
+		result.x = conj.x / normSq;
+		result.y = conj.y / normSq;
+		result.z = conj.z / normSq;
+	}
+	else {
+		result = Identity(); // ノルムが0の場合は単位クォータニオンを返す
+	}
+	return result;
+}
+
+Quaternion Quaternion::MakeRotateAxisAngleQuaternion(const Vector3& axis, float angle) {
+	Quaternion result;
+	float halfAngle = angle * 0.5f;
+	float s = std::sin(halfAngle);
+	result.w = std::cos(halfAngle);
+	result.x = axis.x * s;
+	result.y = axis.y * s;
+	result.z = axis.z * s;
+	return Quaternion::Normalize(result);
+}
+
+
+Vector3 Quaternion::RotateVector(const Vector3& v, const Quaternion& q) {
+	Quaternion p = { v.x, v.y, v.z, 0.0f };
+	Quaternion qConj = Conjugate(q);
+	Quaternion resultQuat = Multiply(Multiply(q, p), qConj);
+	return { resultQuat.x, resultQuat.y, resultQuat.z };
+}
+
+
+Matrix4x4 Quaternion::MakeRotateMatrix(const Quaternion& q) {
+	Matrix4x4 result = {};
+	float xx = q.x * q.x;
+	float yy = q.y * q.y;
+	float zz = q.z * q.z;
+	float ww = q.w * q.w;
+	float xy = q.x * q.y;
+	float xz = q.x * q.z;
+	float yz = q.y * q.z;
+	float wx = q.w * q.x;
+	float wy = q.w * q.y;
+	float wz = q.w * q.z;
+
+	result.m[0][0] = ww + xx - yy - zz;
+	result.m[0][1] = 2.0f * (xy + wz);
+	result.m[0][2] = 2.0f * (xz - wy);
+	result.m[0][3] = 0.0f;
+
+	result.m[1][0] = 2.0f * (xy - wz);
+	result.m[1][1] = ww - xx + yy - zz;
+	result.m[1][2] = 2.0f * (yz + wx);
+	result.m[1][3] = 0.0f;
+
+	result.m[2][0] = 2.0f * (xz + wy);
+	result.m[2][1] = 2.0f * (yz - wx);
+	result.m[2][2] = ww - xx - yy + zz;
+	result.m[2][3] = 0.0f;
+
+	result.m[3][0] = 0.0f;
+	result.m[3][1] = 0.0f;
+	result.m[3][2] = 0.0f;
+	result.m[3][3] = 1.0f;
+
+	return result;
+}
+
+Quaternion Quaternion::Slerp(const Quaternion& q0, const Quaternion& q1, float t) {
+	// 完全一致なら即リターン
+	if (QuaternionAlmostEqual(q0, q1)) {
+		return q0;
+	}
+	Quaternion normQ0 = Normalize(q0);
+	Quaternion normQ1 = Normalize(q1);
+
+	// 二つのQuaternionの間の角度を求める
+	// dot = cosθ
+	float dot = normQ0.x * normQ1.x + normQ0.y * normQ1.y + normQ0.z * normQ1.z + normQ0.w * normQ1.w;
+	if (dot < 0) {
+		normQ1.x = -normQ1.x;
+		normQ1.y = -normQ1.y;
+		normQ1.z = -normQ1.z;
+		normQ1.w = -normQ1.w;
+		dot = -dot;
+	}
+	if (std::isnan(dot)) {
+		return {0.0f,0.0f,0.0f,1.0f};
+	}
+	dot = dot > 1.0f ? 1.0f : dot;
+	float theta = std::acosf(dot);
+	if (std::isnan(theta)) {
+		return { 0.0f,0.0f,0.0f,1.0f };
+	}
+	float sinTheta = std::sin(theta);
+	if (std::isnan(sinTheta)) {
+		return { 0.0f,0.0f,0.0f,1.0f };
+	}
+	if (std::abs(sinTheta) < 1e-6f) {
+		Quaternion result;
+		result.x = normQ0.x + t * (normQ1.x - normQ0.x);
+		result.y = normQ0.y + t * (normQ1.y - normQ0.y);
+		result.z = normQ0.z + t * (normQ1.z - normQ0.z);
+		result.w = normQ0.w + t * (normQ1.w - normQ0.w);
+		if (std::isnan(result.x)) {
+			return { 0.0f,0.0f,0.0f,1.0f };
+		}
+		return Normalize(result);
+	}
+	float sinOne_theta = std::sin((1.0f - t) * theta) / sinTheta;
+	if (std::isnan(sinOne_theta)) {
+		return { 0.0f,0.0f,0.0f,1.0f };
+	}
+	float sinT_theta = std::sin(t * theta) / sinTheta;
+	if (std::isnan(sinT_theta)) {
+		return { 0.0f,0.0f,0.0f,1.0f };
+	}
+	return {
+		normQ0.x * sinOne_theta + normQ1.x * sinT_theta,
+		normQ0.y * sinOne_theta + normQ1.y * sinT_theta,
+		normQ0.z * sinOne_theta + normQ1.z * sinT_theta,
+		normQ0.w * sinOne_theta + normQ1.w * sinT_theta
+	};
+}
+
+Quaternion Quaternion::MakeRotateXYZ(const Vector3& rotate) {
+	// 1. 各軸の回転クォータニオンを生成
+	// Y軸回転
+	Quaternion qY = MakeRotateAxisAngleQuaternion({ 0.0f, 1.0f, 0.0f }, Deg2Rad(rotate.y));
+	// X軸回転
+	Quaternion qX = MakeRotateAxisAngleQuaternion({ 1.0f, 0.0f, 0.0f }, Deg2Rad(rotate.x));
+	// Z軸回転
+	Quaternion qZ = MakeRotateAxisAngleQuaternion({ 0.0f, 0.0f, 1.0f }, Deg2Rad(rotate.z));
+
+	// 2. X, Y, Z の順で合成 (回転の適用順は Z * Y * X)
+	// クォータニオンの乗算は、適用したい回転の逆順で行う
+	// Q_total = Q_z * Q_y * Q_x
+
+	Quaternion result = Multiply(qZ, qY);
+	result = Multiply(result, qX);
+
+	return result;
+}
+
+bool Quaternion::NearlyEqual(float a, float b, float epsilon) {
+	return std::abs(a - b) < epsilon;
+}
+
+bool Quaternion::QuaternionAlmostEqual(const Quaternion& q0, const Quaternion& q1, float epsilon) {
+	return NearlyEqual(q0.x, q1.x, epsilon) &&
+		NearlyEqual(q0.y, q1.y, epsilon) &&
+		NearlyEqual(q0.z, q1.z, epsilon) &&
+		NearlyEqual(q0.w, q1.w, epsilon);
+}
+
+Quaternion Quaternion::MakeFromBasis(const Vector3& newX, const Vector3& newY, const Vector3& newZ) {
+	// Step 1: 回転行列の要素を r_rc (row, column) で定義
+	// 列ベクトルとして (newX, newY, newZ) を配置
+	float r11 = newX.x, r12 = newY.x, r13 = newZ.x;
+	float r21 = newX.y, r22 = newY.y, r23 = newZ.y;
+	float r31 = newX.z, r32 = newY.z, r33 = newZ.z;
+
+	float T = r11 + r22 + r33; // トレースの計算
+	float S;
+	Quaternion q;
+
+	// Step 2: 最大成分による分岐計算
+	if (T > 0.0f) { // Case 1: w が最大
+		S = 2.0f * std::sqrt(T + 1.0f);
+		q.w = 0.25f * S;
+		q.x = (r32 - r23) / S;
+		q.y = (r13 - r31) / S;
+		q.z = (r21 - r12) / S;
+
+	}
+	else if (r11 > r22 && r11 > r33) { // Case 2: r11 が最大 (x が最大)
+		S = 2.0f * std::sqrt(1.0f + r11 - r22 - r33);
+		q.x = 0.25f * S;
+		q.w = (r32 - r23) / S;
+		q.y = (r12 + r21) / S;
+		q.z = (r13 + r31) / S;
+
+	}
+	else if (r22 > r33) { // Case 3: r22 が最大 (y が最大)
+		S = 2.0f * std::sqrt(1.0f - r11 + r22 - r33);
+		q.y = 0.25f * S;
+		q.w = (r13 - r31) / S;
+		q.x = (r12 + r21) / S;
+		q.z = (r23 + r32) / S;
+
+	}
+	else { // Case 4: r33 が最大 (z が最大)
+		S = 2.0f * std::sqrt(1.0f - r11 - r22 + r33);
+		q.z = 0.25f * S;
+		q.w = (r21 - r12) / S;
+		q.x = (r13 + r31) / S;
+		q.y = (r23 + r32) / S;
+	}
+
+	return q;
+}
+
+//=================================
+// Operator Overload
+//=================================
+
+Quaternion operator*(const Quaternion& q,const Quaternion& r) {
+	return Quaternion::Multiply(q, r);
+}
+
+Quaternion& Quaternion::operator*=(const Quaternion& r) {
+	*this = Multiply(*this, r);
+	return *this;  
+}

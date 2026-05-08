@@ -13,10 +13,6 @@ bl_info = {
     "category": "Object"
 }
 
-# メニュー項目描画
-def draw_menu_manual(self, context):
-    self.layout.operator("wm.url_open_preset", text="Manual", icon='HELP')
-
 # トップバーの拡張メニュー
 class TOPBAR_MT_my_menu(bpy.types.Menu):
     bl_idname = "TOPBAR_MT_my_menu"

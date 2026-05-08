@@ -7,5 +7,5 @@ void CommandQueue::SetDescD() {
 
 void CommandQueue::SetDescC() {
 	commandQueue_ = nullptr;
-	commandQueueDesc_;
+	//commandQueueDesc_;
 }

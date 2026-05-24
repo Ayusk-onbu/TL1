@@ -1,6 +1,9 @@
 import bpy
 import math
 import bpy_extras
+import gpu
+import gpu_extras.batch
+import copy
 
 bl_info = {
     "name": "LevelEditor",
@@ -179,6 +182,76 @@ class OBJECT_PT_filename(bpy.types.Panel):
             # プロパティが無ければ、プロパティ追加ボタンを表示
             self.layout.operator(MYADDON_OT_add_filename.bl_idname)
 
+# コライダー描画
+class DrawCollider:
+    # 描画ハンドル
+    handle = None
+    # 3Dビューに登録する描画関数
+    def draw_collider():
+        # 頂点data
+        vertices = {"pos":[]}
+        # インデックスdata
+        indices = []
+
+        # 口調・のオブジェクト中心からのオフセット
+        offsets = [
+            [-0.5,-0.5,-0.5],
+            [+0.5,-0.5,-0.5],
+            [-0.5,+0.5,-0.5],
+            [+0.5,+0.5,-0.5],
+            [-0.5,-0.5,+0.5],
+            [+0.5,-0.5,+0.5],
+            [-0.5,+0.5,+0.5],
+            [+0.5,+0.5,+0.5],
+        ]
+
+        # 立方体のサイズ
+        size = [2,2,2]
+
+        for object in bpy.context.scene.objects:
+            # 追加前の頂点数
+            start = len(vertices["pos"])
+
+            # Boxの８頂点回す
+            for offset in offsets:
+                # オブジェクトの中心座標をコピー
+
+                pos = copy.copy(object.location)
+                # 中心点を基準に各頂点ごとにズラす
+                pos[0]+=offset[0]*size[0]
+                pos[1]+=offset[1]*size[1]
+                pos[2]+=offset[2]*size[2]
+                # 頂点dataリストに追加
+                vertices['pos'].append(pos)
+
+                indices.append([start+0,start+1])
+                indices.append([start+2,start+3])
+                indices.append([start+0,start+2])
+                indices.append([start+1,start+3])
+
+                indices.append([start+4,start+5])
+                indices.append([start+6,start+7])
+                indices.append([start+4,start+6])
+                indices.append([start+5,start+7])
+
+                indices.append([start+0,start+4])
+                indices.append([start+1,start+5])
+                indices.append([start+2,start+6])
+                indices.append([start+3,start+7])
+
+        # ビルドインのシェーダーを取得
+        shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+
+        # バッチを作成
+        batch = gpu_extras.batch.batch_for_shader(shader, "LINES", vertices, indices = indices)
+
+        # シェーダーのパラメータ設定
+        color = [0.5, 1.0, 1.0, 1.0]
+        shader.bind()
+        shader.uniform_float("color", color)
+        # 描画
+        batch.draw(shader)
+
 classes = (
     MYADDON_OT_export_scene,
     MYADDON_OT_create_ico_sphere,
@@ -193,10 +266,16 @@ def register():
         bpy.utils.register_class(cls)
 
     bpy.types.TOPBAR_MT_editor_menus.append(TOPBAR_MT_my_menu.submenu)
+    
+    # 3Dビューに描画関数を追加
+    DrawCollider.handle = bpy.types.SpaceView3D.draw_handler_add(DrawCollider.draw_collider, (), "WINDOW", "POST_VIEW")
+
     print("LevelEditor is True")
     
 def unregister():
     bpy.types.TOPBAR_MT_editor_menus.remove(TOPBAR_MT_my_menu.submenu)
+
+    bpy.types.SpaceView3D.draw_handler_remove(DrawCollider.handle, "WINDOW")
 
     for cls in classes:
         bpy.utils.unregister_class(cls)
